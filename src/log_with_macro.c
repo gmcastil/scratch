@@ -6,9 +6,11 @@
 		fprintf(log_file, "File: %s, Line: %d, Msg: ", __FILE__, __LINE__); \
 		fprintf(log_file, __VA_ARGS__); \
 		fprintf(log_file, "\n"); \
+		fflush(log_file); \
 		fclose(log_file); \
 	} else { \
 		fprintf(stderr, "Could not open or create log file\n"); \
+		fflush(stderr); \
 	} \
 } while (0)
 
