@@ -1,6 +1,8 @@
-CC      	:= /usr/bin/gcc
-CFLAGS  	:= -Wall -pedantic -Wextra -std=c99 -O0 -g3 -fsanitize=undefined,address
-LDFLAGS		:=
+CC      	= /usr/bin/gcc
+CFLAGS  	= -Wall -pedantic -Wextra -std=c99 -O0 -g3 -fsanitize=undefined,address
+LDFLAGS		=
+
+VPATH		= src
 
 log_with_macro: log_with_macro.o
 	$(CC) $(CFLAGS) $< -o $@
