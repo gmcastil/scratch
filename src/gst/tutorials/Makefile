@@ -6,10 +6,10 @@ GST_LDFLAGS	:= $(shell pkg-config --libs gstreamer-1.0)
 
 CFLAGS		+= $(GST_CFLAGS)
 
-basic-tutorial-1: basic-tutorial-1.o
+basic-tutorial-2: basic-tutorial-2.o
 	$(CC) $< $(GST_LDFLAGS) -o $@ 
 
-basic-tutorial-2: basic-tutorial-2.o
+basic-tutorial-1: basic-tutorial-1.o
 	$(CC) $< $(GST_LDFLAGS) -o $@ 
 
 %.o: %.c
