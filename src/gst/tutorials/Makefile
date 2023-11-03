@@ -12,7 +12,15 @@ basic-tutorial-1: basic-tutorial-1.o
 basic-tutorial-1.o: basic-tutorial-1.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+basic-tutorial-2: basic-tutorial-2.o
+	$(CC) $< $(GST_LDFLAGS) -o $@ 
+
+basic-tutorial-2.o: basic-tutorial-2.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
 	$(RM) basic-tutorial-1.o
 	$(RM) basic-tutorial-1
+	$(RM) basic-tutorial-2.o
+	$(RM) basic-tutorial-2
 
