@@ -1,12 +1,15 @@
+#include <stdio.h>
 #include <gst/gst.h>
 
 /* Structure to contain all our information, so we can pass it to callbacks */
 typedef struct _CustomData {
 	GstElement *pipeline;
 	GstElement *source;
-	GstElement *convert;
-	GstElement *resample;
-	GstElement *sink;
+	GstElement *audiosink;
+	GstElement *audioconvert;
+	GstElement *audioresample;
+	GstElement *videosink;
+	GstElement *videoconvert;
 } CustomData;
 
 static void pad_added_handler(GstElement *src, GstPad *new_pad, CustomData *data);
@@ -22,15 +25,21 @@ int main(int argc, char *argv[])
 	gst_init(&argc, &argv);
 
 	data.source = gst_element_factory_make("uridecodebin", "source");
-	data.convert = gst_element_factory_make("audioconvert", "convert");
-	data.resample = gst_element_factory_make("audioresample", "resample");
-	data.sink = gst_element_factory_make("autoaudiosink", "sink");
+	data.audioconvert = gst_element_factory_make("audioconvert", "audioconvert");
+	data.audioresample = gst_element_factory_make("audioresample", "audioresample");
+	data.audiosink = gst_element_factory_make("autoaudiosink", "audiosink");
+	data.videosink = gst_element_factory_make("autovideosink", "videosink");
+	data.videoconvert = gst_element_factory_make("autovideoconvert", "videoconvert");
 
 	data.pipeline = gst_pipeline_new("test-pipeline");
 
-	if (!data.pipeline || !data.source || !data.convert
-	    || !data.resample || !data.sink) {
-		g_printerr("Not all elements could be created.\n");
+	if (!data.pipeline || !data.source ||
+			!data.audioconvert || !data.audioresample || !data.audiosink) {
+		g_printerr("Audio and pipeline elements could not be created.\n");
+		return -1;
+	}
+	if (!data.videosink || !data.videoconvert) {
+		g_printerr("Video elements could not be created.\n");
 		return -1;
 	}
 
@@ -38,18 +47,24 @@ int main(int argc, char *argv[])
 	 * The pipeline consists of all of the elements we have created so far,
 	 * so we still add them all to the bin but...
 	 */
-	gst_bin_add_many(GST_BIN(data.pipeline), data.source, data.convert,
-			 data.resample, data.sink, NULL);
+	gst_bin_add_many(GST_BIN(data.pipeline), data.source, data.audioconvert,
+			 data.audioresample, data.audiosink, data.videoconvert, data.videosink, NULL);
 	/* ...we don't link the source in yet */
-	if (!gst_element_link_many(data.convert, data.resample, data.sink, NULL)) {
-		g_printerr("Elements could not be linked\n");
+	if (!gst_element_link_many(data.audioconvert, data.audioresample, data.audiosink, NULL)) {
+		g_printerr("Audio elements could not be linked\n");
+		gst_object_unref(data.pipeline);
+		return -1;
+	}
+	if (!gst_element_link(data.videoconvert, data.videosink)) {
+		g_printerr("Video elements could not be linked\n");
 		gst_object_unref(data.pipeline);
 		return -1;
 	}
 
 	g_object_set(data.source, "uri",
-		     "https://gstreamer.freedesktop.org/data/media/sintel_trailer-480p.webm",
-		     NULL);
+				/* "http://gstreamer.freedesktop.org/media/sintel_trailer-480p.webm", BROKEN */
+				"http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+				NULL);
 	/*
 	 * Connect the 'pad was added signal' to the callback function, similar
 	 * to how signals and slots work in things like the Qt framework
@@ -123,7 +138,10 @@ int main(int argc, char *argv[])
 
 static void pad_added_handler(GstElement *src, GstPad *new_pad, CustomData *data)
 {
-	GstPad *sink_pad = gst_element_get_static_pad(data->convert, "sink");
+	GstPad *sink_pad = NULL;
+	GstPad *audiosink_pad = gst_element_get_static_pad(data->audioconvert, "sink");
+	GstPad *videosink_pad = gst_element_get_static_pad(data->videoconvert, "sink");
+
 	GstPadLinkReturn ret;
 	GstCaps *new_pad_caps = NULL;
 	GstStructure *new_pad_struct = NULL;
@@ -132,33 +150,39 @@ static void pad_added_handler(GstElement *src, GstPad *new_pad, CustomData *data
 	g_print("Received new pad '%s' from '%s':\n",
 			GST_PAD_NAME(new_pad), GST_ELEMENT_NAME(src));
 
-	if (gst_pad_is_linked(sink_pad)) {
-		g_print("We are already linked. Ignoring\n");
+	/* Video and audio converters are linked, so we're done */
+	if (gst_pad_is_linked(videosink_pad) && gst_pad_is_linked(audiosink_pad)) {
+		g_print("Audio and video already linked. Ignoring\n");
 		goto exit;
 	}
 
+	/* Identify the type of new pad that was added */
 	new_pad_caps = gst_pad_get_current_caps(new_pad);
 	new_pad_struct = gst_caps_get_structure(new_pad_caps, 0);
 	new_pad_type = gst_structure_get_name(new_pad_struct);
-	if (!g_str_has_prefix(new_pad_type, "audio/x-raw")) {
-		g_print("It has type '%s' which is not raw audio. Ignoring\n", new_pad_type);
+
+	if (g_str_has_prefix(new_pad_type, "audio/x-raw")) {
+		sink_pad = audiosink_pad;
+	} else if (g_str_has_prefix(new_pad_type, "video/x-raw")) {
+		sink_pad = videosink_pad;
+	} else {
+		g_print("New pad is type '%s' is not raw audio or video.\n", new_pad_type);
 		goto exit;
 	}
+
 	/* Attempt the link */
 	ret = gst_pad_link (new_pad, sink_pad);
 	if (GST_PAD_LINK_FAILED (ret)) {
-		g_print ("Type is '%s' but link failed.\n", new_pad_type);
+		g_print("Pad type is '%s' but link failed.\n", new_pad_type);
+		goto exit;
 	} else {
-		g_print ("Link succeeded (type '%s').\n", new_pad_type);
+		g_print("Link succeeded (type '%s').\n", new_pad_type);
 	}
-	
+
 exit:
-	/* Unreference the new pad's caps, if we got them */
-	if (new_pad_caps != NULL) {
-		gst_caps_unref (new_pad_caps);
-	}
-	
-	/* Unreference the sink pad */
-	gst_object_unref (sink_pad);
+	if (new_pad_caps) gst_caps_unref (new_pad_caps);
+	if (videosink_pad) gst_object_unref (videosink_pad);
+	if (audiosink_pad) gst_object_unref (audiosink_pad);
+
 	return;
 }

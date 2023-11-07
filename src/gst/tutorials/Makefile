@@ -11,7 +11,6 @@ GST_TUTORIALS	:= \
 			basic-tutorial-2 \
 			basic-tutorial-3
 
-
 all: $(GST_TUTORIALS)
 
 basic-tutorial-3: basic-tutorial-3.o
