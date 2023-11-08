@@ -7,6 +7,7 @@ typedef struct CustomData {
 	gboolean terminate;
 	gboolean seek_enabled;
 	gboolean seek_done;
+	gboolean second_seek_done;
 	gint64 duration;
 } CustomData;
 
@@ -23,6 +24,7 @@ int main(int argc, char *argv[])
 	data.terminate = FALSE;
 	data.seek_enabled = FALSE;
 	data.seek_done = FALSE;
+	data.second_seek_done = FALSE;
 	data.duration = GST_CLOCK_TIME_NONE;
 
 	gst_init(&argc, &argv);
@@ -79,6 +81,11 @@ int main(int argc, char *argv[])
 					gst_element_seek_simple(data.playbin, GST_FORMAT_TIME,
 						GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT, 30 * GST_SECOND);
 					data.seek_done = TRUE;
+				}
+				if (data.seek_enabled && !data.second_seek_done && current > 40 * GST_SECOND) {
+					g_print("\nReached 40s, performing second seek...\n");
+					gst_element_seek_simple(data.playbin, GST_FORMAT_TIME,
+						GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_KEY_UNIT,  0 * GST_SECOND);
 				}
 			}
 		}
